@@ -1,0 +1,9 @@
+crear entorno virtual
+    py -3.11 -m venv venv
+activar entorno virtual
+    venv\Scripts\activate
+IMPORTANTE
+    Solo funciona mediapipe en versiones de python inferiores a la 3.12
+Instalar:
+    pip install opencv-python
+    pip install mediapipe
