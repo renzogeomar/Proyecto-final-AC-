@@ -105,6 +105,54 @@ def reset_snake():
     timer_snake = 0
     spawn_comida()
 
+# --- VARIABLES JUEGO 4 (LADRILLOS / BREAKOUT) ---
+ladrillos_lista = []
+ladrillos_filas = 5
+ladrillos_cols = 10
+ladrillo_ancho = ANCHO_VENTANA // ladrillos_cols
+ladrillo_alto = 30
+ladrillo_colores = [(255, 0, 0), (255, 100, 0), (255, 255, 0), (0, 255, 0), (0, 0, 255)]
+
+# Pala y Bola
+pala_ladrillo_x = ANCHO_VENTANA // 2
+pala_ladrillo_ancho = 150
+pala_ladrillo_alto = 20
+bola_ladrillo_x = ANCHO_VENTANA // 2
+bola_ladrillo_y = ALTO_VENTANA // 2
+vel_ladrillo_x = 10
+vel_ladrillo_y = -10 # Empieza subiendo
+bola_ladrillo_radio = 12
+
+score_ladrillos = 0
+game_over_ladrillos = False
+victoria_ladrillos = False
+
+def crear_nivel_ladrillos():
+    """Genera la lista de ladrillos"""
+    global ladrillos_lista
+    ladrillos_lista = []
+    for fila in range(ladrillos_filas):
+        for col in range(ladrillos_cols):
+            # Guardamos [x, y, color_rgb, activo(True/False)]
+            x = col * ladrillo_ancho
+            y = fila * ladrillo_alto + 80 # +80 de margen superior
+            color = ladrillo_colores[fila % len(ladrillo_colores)]
+            ladrillos_lista.append([x, y, color, True])
+
+def reset_ladrillos():
+    global pala_ladrillo_x, bola_ladrillo_x, bola_ladrillo_y, vel_ladrillo_x, vel_ladrillo_y
+    global score_ladrillos, game_over_ladrillos, victoria_ladrillos
+    
+    crear_nivel_ladrillos()
+    pala_ladrillo_x = ANCHO_VENTANA // 2
+    bola_ladrillo_x = ANCHO_VENTANA // 2
+    bola_ladrillo_y = ALTO_VENTANA // 2 + 100
+    vel_ladrillo_x = 10 * random.choice([1, -1])
+    vel_ladrillo_y = -10
+    score_ladrillos = 0
+    game_over_ladrillos = False
+    victoria_ladrillos = False
+
 # --- FUNCIONES AUXILIARES ---
 
 def detectar_pinch(ind_x, ind_y, pul_x, pul_y):
@@ -180,6 +228,9 @@ def mostrar_menu(frame, ind_x, ind_y, click_realizado):
                 elif idx == 2: # Juego 3 (Snake) <--- NUEVO
                     reset_snake()
                     ESTADO_ACTUAL = "JUEGO_3"
+                elif idx == 3: # Ladrillos <--- NUEVO
+                    reset_ladrillos()
+                    ESTADO_ACTUAL = "JUEGO_4"
                 else:
                     print(f"Juego {idx+1} aún no implementado")
             
@@ -463,6 +514,119 @@ def jugar_snake(frame, ind_x, ind_y, click_realizado):
 
     return frame
 
+def jugar_ladrillos(frame, ind_x, click_realizado):
+    global pala_ladrillo_x, bola_ladrillo_x, bola_ladrillo_y, vel_ladrillo_x, vel_ladrillo_y
+    global score_ladrillos, game_over_ladrillos, victoria_ladrillos, ESTADO_ACTUAL, ladrillos_lista
+
+    # --- BOTÓN SALIR ---
+    cv2.rectangle(frame, (20, 20), (150, 70), (0, 0, 255), -1)
+    cv2.putText(frame, "MENU", (40, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    
+    # Detección de click en botón Menú (ind_x necesitamos pasarlo, ind_y asumimos zona superior)
+    # Nota: Para precisión total, pasa ind_y a la función. Aquí simplificamos.
+    if click_realizado and 20 < ind_x < 150: 
+         # Asumiendo que el usuario está apuntando arriba a la izq
+         ESTADO_ACTUAL = "MENU"
+         return frame
+
+    # --- PANTALLAS DE FIN DE JUEGO ---
+    if game_over_ladrillos or victoria_ladrillos:
+        overlay = frame.copy()
+        color_bg = (0, 0, 0) if game_over_ladrillos else (0, 200, 0)
+        texto = "GAME OVER" if game_over_ladrillos else "¡VICTORIA!"
+        
+        cv2.rectangle(overlay, (ANCHO_VENTANA//2 - 300, ALTO_VENTANA//2 - 150), 
+                               (ANCHO_VENTANA//2 + 300, ALTO_VENTANA//2 + 150), color_bg, -1)
+        frame = cv2.addWeighted(overlay, 0.7, frame, 0.3, 0)
+        
+        cv2.putText(frame, texto, (ANCHO_VENTANA//2 - 200, ALTO_VENTANA//2 - 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 5)
+        cv2.putText(frame, "Junta dedos para REINICIAR", (ANCHO_VENTANA//2 - 250, ALTO_VENTANA//2 + 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
+        if click_realizado:
+            reset_ladrillos()
+        return frame
+
+    # --- CONTROL PALA (MOVIMIENTO HORIZONTAL) ---
+    if ind_x != -1:
+        pala_ladrillo_x = ind_x
+
+    # Limites pala
+    if pala_ladrillo_x < pala_ladrillo_ancho//2: pala_ladrillo_x = pala_ladrillo_ancho//2
+    if pala_ladrillo_x > ANCHO_VENTANA - pala_ladrillo_ancho//2: pala_ladrillo_x = ANCHO_VENTANA - pala_ladrillo_ancho//2
+
+    # --- FÍSICA BOLA ---
+    bola_ladrillo_x += vel_ladrillo_x
+    bola_ladrillo_y += vel_ladrillo_y
+
+    # Rebote Paredes (Izquierda, Derecha, Techo)
+    if bola_ladrillo_x <= bola_ladrillo_radio or bola_ladrillo_x >= ANCHO_VENTANA - bola_ladrillo_radio:
+        vel_ladrillo_x *= -1
+    if bola_ladrillo_y <= bola_ladrillo_radio:
+        vel_ladrillo_y *= -1
+    
+    # Perder (Suelo)
+    if bola_ladrillo_y >= ALTO_VENTANA:
+        game_over_ladrillos = True
+
+    # Colisión con Pala
+    pala_y_pos = ALTO_VENTANA - 60
+    # Verificamos si la bola está a la altura de la pala
+    if (pala_y_pos - bola_ladrillo_radio < bola_ladrillo_y < pala_y_pos + pala_ladrillo_alto):
+        # Verificamos si está dentro del ancho de la pala
+        if (pala_ladrillo_x - pala_ladrillo_ancho//2 < bola_ladrillo_x < pala_ladrillo_x + pala_ladrillo_ancho//2):
+            vel_ladrillo_y *= -1 # Rebote vertical
+            # Ajuste para evitar que se quede pegada
+            bola_ladrillo_y = pala_y_pos - bola_ladrillo_radio - 2 
+            
+            # Efecto: Si pega en los bordes de la pala, cambia velocidad X
+            diferencia = bola_ladrillo_x - pala_ladrillo_x
+            vel_ladrillo_x = int(diferencia / 5) # Da efecto a la bola
+
+    # --- COLISIÓN CON LADRILLOS ---
+    ladrillos_activos = 0
+    hit = False
+    for ladrillo in ladrillos_lista:
+        # ladrillo = [x, y, color, activo]
+        if ladrillo[3]: # Si está activo
+            ladrillos_activos += 1
+            lx, ly = ladrillo[0], ladrillo[1]
+            
+            # Chequeo simple de colisión Rectángulo-Círculo
+            if (lx < bola_ladrillo_x < lx + ladrillo_ancho) and \
+               (ly < bola_ladrillo_y < ly + ladrillo_alto) and not hit:
+                
+                ladrillo[3] = False # Desactivar ladrillo
+                vel_ladrillo_y *= -1 # Rebotar bola
+                score_ladrillos += 10
+                hit = True # Solo romper uno por frame para evitar bugs
+                
+    if ladrillos_activos == 0:
+        victoria_ladrillos = True
+
+    # --- DIBUJADO ---
+    
+    # Dibujar Ladrillos
+    for ladrillo in ladrillos_lista:
+        if ladrillo[3]: # Solo dibujar activos
+            cv2.rectangle(frame, (ladrillo[0] + 2, ladrillo[1] + 2), 
+                          (ladrillo[0] + ladrillo_ancho - 2, ladrillo[1] + ladrillo_alto - 2), 
+                          ladrillo[2], -1)
+
+    # Dibujar Pala
+    cv2.rectangle(frame, (pala_ladrillo_x - pala_ladrillo_ancho//2, ALTO_VENTANA - 60), 
+                  (pala_ladrillo_x + pala_ladrillo_ancho//2, ALTO_VENTANA - 40), (0, 255, 255), -1)
+
+    # Dibujar Bola
+    cv2.circle(frame, (bola_ladrillo_x, int(bola_ladrillo_y)), bola_ladrillo_radio, (255, 255, 255), -1)
+    
+    # Score
+    cv2.putText(frame, f"Score: {score_ladrillos}", (ANCHO_VENTANA - 250, 60), 
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+    return frame
+
 # --- BUCLE PRINCIPAL ---
 
 with mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.7) as hands:
@@ -523,6 +687,10 @@ with mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_conf
         
         elif ESTADO_ACTUAL == "JUEGO_3": # <--- NUEVO BLOQUE SNAKE
              frame = jugar_snake(frame, ind_x, ind_y, click_realizado)
+
+        elif ESTADO_ACTUAL == "JUEGO_4": # <--- NUEVO BLOQUE
+             # Pasamos ind_x (movimiento lateral) y click (para reiniciar/salir)
+             frame = jugar_ladrillos(frame, ind_x, click_realizado)
 
         cv2.imshow("Proyecto Multijuego CV", frame)
         if cv2.waitKey(1) & 0xFF == 27: # ESC para salir
