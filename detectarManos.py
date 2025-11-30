@@ -153,6 +153,43 @@ def reset_ladrillos():
     game_over_ladrillos = False
     victoria_ladrillos = False
 
+# --- VARIABLES JUEGO 5 (FRUIT NINJA) ---
+frutas = [] # Cada elemento será: [x, y, vel_x, vel_y, es_bomba]
+gravedad_fruta = 0.6
+score_ninja = 0
+vidas_ninja = 3
+game_over_ninja = False
+radio_fruta = 35
+puntos_rastro = [] # Para dibujar la estela de la espada
+
+def spawn_fruta():
+    """Lanza una nueva fruta o bomba desde abajo"""
+    # Posición X aleatoria, pero no muy pegada a los bordes
+    x = random.randint(100, ANCHO_VENTANA - 100)
+    y = ALTO_VENTANA # Empieza abajo
+    
+    # Velocidad hacia arriba (aleatoria para variar altura)
+    vel_y = random.randint(-22, -16) 
+    
+    # Velocidad lateral (para que haga una curva hacia el centro o lados)
+    if x < ANCHO_VENTANA // 2:
+        vel_x = random.randint(2, 8) # Va a la derecha
+    else:
+        vel_x = random.randint(-8, -2) # Va a la izquierda
+        
+    # 20% de probabilidad de ser bomba
+    es_bomba = True if random.random() < 0.2 else False
+    
+    frutas.append([x, y, vel_x, vel_y, es_bomba])
+
+def reset_ninja():
+    global frutas, score_ninja, vidas_ninja, game_over_ninja, puntos_rastro
+    frutas = []
+    score_ninja = 0
+    vidas_ninja = 3
+    game_over_ninja = False
+    puntos_rastro = []
+
 # --- FUNCIONES AUXILIARES ---
 
 def detectar_pinch(ind_x, ind_y, pul_x, pul_y):
@@ -202,8 +239,8 @@ def mostrar_menu(frame, ind_x, ind_y, click_realizado):
     separacion_x = 50
     separacion_y = 50
 
-    nombres_juegos = ["1. Flappy Hand", "2. Pong", "3. Snake (Vacio)", 
-                      "4. Ladrillos (Vacio)", "5. Ninja (Vacio)", "6. Pintar (Vacio)"]
+    nombres_juegos = ["1. Flappy Hand", "2. Pong", "3. Snake", 
+                      "4. Ladrillos", "5. Ninja", "6. Pintar (Vacio)"]
     
     # Dibujar los 6 botones
     idx = 0
@@ -225,12 +262,15 @@ def mostrar_menu(frame, ind_x, ind_y, click_realizado):
                 elif idx == 1: # Juego 2 (PONG) 
                     reset_pong_full()
                     ESTADO_ACTUAL = "JUEGO_2"
-                elif idx == 2: # Juego 3 (Snake) <--- NUEVO
+                elif idx == 2: # Juego 3 (Snake) 
                     reset_snake()
                     ESTADO_ACTUAL = "JUEGO_3"
-                elif idx == 3: # Ladrillos <--- NUEVO
+                elif idx == 3: # Ladrillos 
                     reset_ladrillos()
                     ESTADO_ACTUAL = "JUEGO_4"
+                elif idx == 4: # Ninja 
+                    reset_ninja()
+                    ESTADO_ACTUAL = "JUEGO_5"
                 else:
                     print(f"Juego {idx+1} aún no implementado")
             
@@ -627,6 +667,107 @@ def jugar_ladrillos(frame, ind_x, click_realizado):
 
     return frame
 
+def jugar_ninja(frame, ind_x, ind_y, click_realizado):
+    global frutas, score_ninja, vidas_ninja, game_over_ninja, ESTADO_ACTUAL, puntos_rastro
+    
+    # --- BOTÓN SALIR ---
+    cv2.rectangle(frame, (20, 20), (150, 70), (0, 0, 255), -1)
+    cv2.putText(frame, "MENU", (40, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    
+    if click_realizado and 20 < ind_x < 150 and 20 < ind_y < 70:
+        ESTADO_ACTUAL = "MENU"
+        return frame
+
+    # --- PANTALLA GAME OVER ---
+    if game_over_ninja:
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (ANCHO_VENTANA//2 - 300, ALTO_VENTANA//2 - 150), 
+                               (ANCHO_VENTANA//2 + 300, ALTO_VENTANA//2 + 150), (0,0,0), -1)
+        frame = cv2.addWeighted(overlay, 0.7, frame, 0.3, 0)
+        
+        cv2.putText(frame, "GAME OVER", (ANCHO_VENTANA//2 - 200, ALTO_VENTANA//2 - 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 5)
+        cv2.putText(frame, f"Score Final: {score_ninja}", (ANCHO_VENTANA//2 - 150, ALTO_VENTANA//2 + 20), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(frame, "Junta dedos para REINICIAR", (ANCHO_VENTANA//2 - 250, ALTO_VENTANA//2 + 80), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        
+        if click_realizado:
+            reset_ninja()
+        return frame
+
+    # --- LÓGICA DEL JUEGO ---
+    
+    # 1. Generar frutas aleatoriamente (aprox cada 30-40 frames)
+    if random.randint(0, 100) < 3: # 3% de chance por frame
+        spawn_fruta()
+
+    # 2. Actualizar Rastro de Espada (Visual)
+    if ind_x != -1:
+        puntos_rastro.append((ind_x, ind_y))
+    if len(puntos_rastro) > 10: # Mantener solo los últimos 10 puntos
+        puntos_rastro.pop(0)
+
+    # 3. Mover y gestionar frutas
+    # Iteramos sobre una copia de la lista para poder borrar elementos seguramente
+    for fruta in frutas[:]:
+        # fruta = [x, y, vx, vy, es_bomba]
+        
+        # Movimiento (Física)
+        fruta[0] += fruta[2] # X += Vx
+        fruta[1] += fruta[3] # Y += Vy
+        fruta[3] += gravedad_fruta # Gravedad afecta a Vy
+        
+        # Detectar CORTE con el dedo
+        # Si la distancia entre el dedo y la fruta es menor al radio
+        if ind_x != -1:
+            distancia = math.hypot(ind_x - fruta[0], ind_y - fruta[1])
+            if distancia < radio_fruta:
+                if fruta[4]: # Es BOMBA
+                    game_over_ninja = True
+                else: # Es FRUTA
+                    score_ninja += 1
+                    frutas.remove(fruta)
+                    continue # Saltamos al siguiente ciclo para no procesar más esta fruta borrada
+
+        # Detectar si cae fuera de pantalla
+        if fruta[1] > ALTO_VENTANA + 50:
+            if not fruta[4]: # Si se cae una fruta (no bomba), pierdes vida
+                vidas_ninja -= 1
+                if vidas_ninja <= 0:
+                    game_over_ninja = True
+            frutas.remove(fruta)
+
+    # --- DIBUJADO ---
+    
+    # 1. Dibujar Rastro Espada
+    for i in range(1, len(puntos_rastro)):
+        # Grosor variable (más fino al final)
+        thickness = int(np.sqrt(i * 2))
+        cv2.line(frame, puntos_rastro[i-1], puntos_rastro[i], (255, 255, 255), thickness)
+
+    # 2. Dibujar Frutas
+    for fruta in frutas:
+        x, y = int(fruta[0]), int(fruta[1])
+        if fruta[4]: # Bomba
+            cv2.circle(frame, (x, y), radio_fruta, (0, 0, 0), -1) # Negro
+            cv2.circle(frame, (x, y), radio_fruta, (0, 0, 255), 2) # Borde Rojo
+            # Mecha de bomba (detalle visual simple)
+            cv2.line(frame, (x, y-radio_fruta), (x+10, y-radio_fruta-10), (100,100,100), 2)
+        else: # Fruta
+            cv2.circle(frame, (x, y), radio_fruta, (0, 200, 0), -1) # Verde
+            cv2.circle(frame, (x, y), radio_fruta-10, (100, 255, 100), -1) # Brillo interno
+
+    # 3. Interfaz (Score y Vidas)
+    cv2.putText(frame, f"Score: {score_ninja}", (ANCHO_VENTANA - 250, 60), 
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    
+    # Dibujar corazones (vidas)
+    for i in range(vidas_ninja):
+        cv2.circle(frame, (ANCHO_VENTANA - 250 + (i*40), 100), 15, (0, 0, 255), -1)
+
+    return frame
+
 # --- BUCLE PRINCIPAL ---
 
 with mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.7) as hands:
@@ -691,6 +832,10 @@ with mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_conf
         elif ESTADO_ACTUAL == "JUEGO_4": # <--- NUEVO BLOQUE
              # Pasamos ind_x (movimiento lateral) y click (para reiniciar/salir)
              frame = jugar_ladrillos(frame, ind_x, click_realizado)
+
+        elif ESTADO_ACTUAL == "JUEGO_5": # <--- NUEVO BLOQUE
+             # Pasamos coords para cortar y click para reiniciar/salir
+             frame = jugar_ninja(frame, ind_x, ind_y, click_realizado)
 
         cv2.imshow("Proyecto Multijuego CV", frame)
         if cv2.waitKey(1) & 0xFF == 27: # ESC para salir
