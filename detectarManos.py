@@ -190,6 +190,18 @@ def reset_ninja():
     game_over_ninja = False
     puntos_rastro = []
 
+# --- VARIABLES JUEGO 6 (PINTAR) ---
+canvas_pintar = np.zeros((ALTO_VENTANA, ANCHO_VENTANA, 3), np.uint8) # Lienzo negro
+xp, yp = 0, 0 # Coordenadas previas (para conectar líneas)
+color_pincel = (255, 0, 255) # Color inicial (Magenta)
+grosor_pincel = 15
+colores_ui = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 255, 255), (0, 0, 0)] # Azul, Verde, Rojo, Amarillo, Borrador
+# Nota: OpenCV usa BGR, así que (255,0,0) es Azul. El último (0,0,0) es el Borrador.
+
+def reset_pintar():
+    global canvas_pintar
+    canvas_pintar = np.zeros((ALTO_VENTANA, ANCHO_VENTANA, 3), np.uint8) # Limpiar lienzo
+
 # --- FUNCIONES AUXILIARES ---
 
 def detectar_pinch(ind_x, ind_y, pul_x, pul_y):
@@ -240,7 +252,7 @@ def mostrar_menu(frame, ind_x, ind_y, click_realizado):
     separacion_y = 50
 
     nombres_juegos = ["1. Flappy Hand", "2. Pong", "3. Snake", 
-                      "4. Ladrillos", "5. Ninja", "6. Pintar (Vacio)"]
+                      "4. Ladrillos", "5. Ninja", "6. Pintar"]
     
     # Dibujar los 6 botones
     idx = 0
@@ -271,6 +283,9 @@ def mostrar_menu(frame, ind_x, ind_y, click_realizado):
                 elif idx == 4: # Ninja 
                     reset_ninja()
                     ESTADO_ACTUAL = "JUEGO_5"
+                elif idx == 5: # Pintar 
+                    reset_pintar()
+                    ESTADO_ACTUAL = "JUEGO_6"
                 else:
                     print(f"Juego {idx+1} aún no implementado")
             
@@ -768,6 +783,91 @@ def jugar_ninja(frame, ind_x, ind_y, click_realizado):
 
     return frame
 
+def jugar_pintar(frame, ind_x, ind_y, pul_x, pul_y, click_realizado):
+    global canvas_pintar, color_pincel, grosor_pincel, xp, yp, ESTADO_ACTUAL
+
+    # --- BOTÓN SALIR ---
+    cv2.rectangle(frame, (20, 20), (150, 70), (0, 0, 255), -1)
+    cv2.putText(frame, "MENU", (40, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    
+    if click_realizado and 20 < ind_x < 150 and 20 < ind_y < 70:
+        ESTADO_ACTUAL = "MENU"
+        return frame
+
+    # --- INTERFAZ DE COLORES (HEADER) ---
+    # Dibujamos rectángulos en la parte superior
+    ancho_color = 100
+    inicio_x = ANCHO_VENTANA // 2 - (len(colores_ui) * ancho_color) // 2
+    
+    cv2.rectangle(frame, (inicio_x - 10, 10), (inicio_x + len(colores_ui)*ancho_color + 10, 90), (50,50,50), -1)
+    
+    for i, color in enumerate(colores_ui):
+        x = inicio_x + i * ancho_color
+        y = 20
+        # Si es el borrador (negro), dibujamos un borde blanco para verlo
+        borde = (255, 255, 255) if color == (0, 0, 0) else color
+        cv2.rectangle(frame, (x, y), (x + ancho_color - 10, 80), color, -1)
+        cv2.rectangle(frame, (x, y), (x + ancho_color - 10, 80), borde, 2)
+        
+        # Texto para el borrador
+        if color == (0,0,0):
+             cv2.putText(frame, "GOMA", (x+10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+
+    # --- LÓGICA DE DIBUJO ---
+    if ind_x != -1:
+        # 1. Detectar si estamos "apretando" (Pinch continuo)
+        distancia = math.hypot(ind_x - pul_x, ind_y - pul_y)
+        modo_dibujo = distancia < 45 # Si están cerca, dibujamos
+
+        # 2. Selección de color (Si estamos arriba y haciendo click)
+        if ind_y < 90 and modo_dibujo:
+            # Verificar en qué caja de color estamos
+            if ind_x > inicio_x:
+                index_col = (ind_x - inicio_x) // ancho_color
+                if 0 <= index_col < len(colores_ui):
+                    color_pincel = colores_ui[index_col]
+                    # Si es goma, pincel más grande
+                    grosor_pincel = 40 if color_pincel == (0,0,0) else 15
+
+        # 3. Dibujar en el Lienzo (Si estamos abajo)
+        if modo_dibujo and ind_y > 90:
+            if xp == 0 and yp == 0: # Primer punto
+                xp, yp = ind_x, ind_y
+            
+            # Dibujamos LÍNEAS entre el punto anterior y el actual para suavidad
+            if color_pincel == (0, 0, 0):
+                # Goma: Dibuja negro en el canvas
+                cv2.line(canvas_pintar, (xp, yp), (ind_x, ind_y), (0, 0, 0), grosor_pincel)
+            else:
+                # Pincel: Dibuja color
+                cv2.line(canvas_pintar, (xp, yp), (ind_x, ind_y), color_pincel, grosor_pincel)
+            
+            xp, yp = ind_x, ind_y # Actualizamos previo
+            
+        else:
+            # Si soltamos los dedos, reseteamos el punto previo para no arrastrar líneas
+            xp, yp = 0, 0
+
+    # --- MEZCLAR IMÁGENES (FUSIÓN MÁGICA) ---
+    # Convertimos el canvas a escala de grises para crear una máscara
+    img_gray = cv2.cvtColor(canvas_pintar, cv2.COLOR_BGR2GRAY)
+    _, img_inv = cv2.threshold(img_gray, 50, 255, cv2.THRESH_BINARY_INV)
+    
+    # "Borramos" del frame original el área donde hay dibujo (se vuelve negra)
+    img_inv = cv2.cvtColor(img_inv, cv2.COLOR_GRAY2BGR)
+    frame = cv2.bitwise_and(frame, img_inv)
+    
+    # "Sumamos" el dibujo coloreado al hueco negro que acabamos de hacer
+    frame = cv2.bitwise_or(frame, canvas_pintar)
+
+    # --- CURSOR VISUAL ---
+    # Muestra qué color tienes seleccionado en la punta del dedo
+    if ind_x != -1:
+        color_cursor = (200, 200, 200) if color_pincel == (0,0,0) else color_pincel
+        cv2.circle(frame, (ind_x, ind_y), grosor_pincel//2, color_cursor, -1)
+
+    return frame
+
 # --- BUCLE PRINCIPAL ---
 
 with mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.7) as hands:
@@ -836,6 +936,10 @@ with mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_conf
         elif ESTADO_ACTUAL == "JUEGO_5": # <--- NUEVO BLOQUE
              # Pasamos coords para cortar y click para reiniciar/salir
              frame = jugar_ninja(frame, ind_x, ind_y, click_realizado)
+
+        elif ESTADO_ACTUAL == "JUEGO_6": # <--- NUEVO BLOQUE
+             # IMPORTANTE: Pasamos pul_x y pul_y también
+             frame = jugar_pintar(frame, ind_x, ind_y, pul_x, pul_y, click_realizado)
 
         cv2.imshow("Proyecto Multijuego CV", frame)
         if cv2.waitKey(1) & 0xFF == 27: # ESC para salir
