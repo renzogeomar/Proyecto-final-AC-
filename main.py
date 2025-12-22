@@ -2,10 +2,10 @@ import cv2
 import mediapipe as mp
 import math
 import config
-import juegos # Importamos nuestro módulo de juegos
+import juegos 
 
 # Configuración Inicial
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 cap.set(3, config.ANCHO)
 cap.set(4, config.ALTO)
 
@@ -57,6 +57,11 @@ with mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_conf
         frame, estado_actual = juegos.gestionar_flujo(
             estado_actual, frame, ind_x, ind_y, pul_x, pul_y, click_realizado
         )
+
+        # ---DETECTAR CIERRE ---
+        if estado_actual == "SALIR":
+            print("Cerrando aplicación...")
+            break # Rompe el bucle while True y cierra el programa
 
         cv2.imshow("Proyecto AR Multijuego", frame)
         if cv2.waitKey(1) & 0xFF == 27:
