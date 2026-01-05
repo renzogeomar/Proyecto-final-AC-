@@ -52,7 +52,6 @@ with mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_conf
                     click_realizado = True
                 pinch_anterior = pinch_actual
 
-        # --- AQUÍ OCURRE LA MAGIA ---
         # Llamamos a nuestro módulo de juegos
         frame, estado_actual = juegos.gestionar_flujo(
             estado_actual, frame, ind_x, ind_y, pul_x, pul_y, click_realizado

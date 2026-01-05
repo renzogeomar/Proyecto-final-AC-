@@ -487,7 +487,6 @@ def jugar_flappy(frame, click):
     
     v = flappy_vars
     
-    # --- LÓGICA (Sin cambios mayores) ---
     if not v['game_over']:
         if click: v['vel_y'] = -14
         v['vel_y'] += 0.8
@@ -526,7 +525,6 @@ def jugar_flappy(frame, click):
                     (bird_rect_y + bird_radio > tubo_y_inf_arriba + apertura):
                      v['game_over'] = True
 
-    # --- DIBUJADO MEJORADO (Aquí está el cambio) ---
     
     ancho_tubo = 80
     apertura = 220
